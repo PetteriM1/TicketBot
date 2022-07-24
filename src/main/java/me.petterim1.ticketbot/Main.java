@@ -66,9 +66,10 @@ public class Main {
     private static void createPanel(TextChannel channel) {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setColor(Color.RED);
-        embed.setAuthor(CONFIG.getProperty("tickets_panel_title"));
-        embed.setDescription(CONFIG.getProperty("tickets_panel_text"));
-        channel.sendMessageEmbeds(embed.build()).setActionRow(Button.of(ButtonStyle.PRIMARY, ButtonID.OPEN_TICKET, CONFIG.getProperty("tickets_panel_button_text"), Emoji.fromUnicode("\uD83C\uDFAB"))).queue();
+        embed.setAuthor(CONFIG.getProperty("tickets_panel_title", "tickets_panel_title"));
+        embed.setDescription(CONFIG.getProperty("tickets_panel_text", "tickets_panel_text"));
+        channel.sendMessageEmbeds(embed.build())
+                .setActionRow(Button.of(ButtonStyle.PRIMARY, ElementID.BTN_OPEN_TICKET, CONFIG.getProperty("tickets_panel_button_text", "tickets_panel_button_text"), Emoji.fromUnicode("\uD83C\uDFAB"))).queue();
     }
 
     static void log(String text) {
