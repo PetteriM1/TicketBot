@@ -3,13 +3,10 @@ package me.petterim1.ticketbot;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.Activity;
-import net.dv8tion.jda.api.entities.Message;
-import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.requests.restaction.MessageAction;
-import net.dv8tion.jda.internal.requests.restaction.MessageActionImpl;
+import net.dv8tion.jda.api.interactions.components.Button;
+import net.dv8tion.jda.api.interactions.components.ButtonStyle;
 
 import javax.security.auth.login.LoginException;
 import java.awt.*;
@@ -63,7 +60,7 @@ public class Main extends ListenerAdapter {
         embed.setColor(Color.RED);
         embed.setAuthor(CONFIG.getProperty("tickets_panel_title"));
         embed.setDescription(CONFIG.getProperty("tickets_panel_text"));
-        channel.sendMessage(embed.build()).queue();
+        channel.sendMessageEmbeds(embed.build()).setActionRow(Button.of(ButtonStyle.PRIMARY, ButtonID.OPEN_TICKET, CONFIG.getProperty("tickets_panel_button_text"), Emoji.fromUnicode("\uD83C\uDFAB"))).queue();
     }
 
     static void log(String text) {
