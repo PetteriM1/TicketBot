@@ -43,7 +43,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>Main</mainClass>
+                            <mainClass>me.petterim1.ticketbot.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -52,6 +52,15 @@
                 </configuration>
             </plugin>
         </plugins>
+        <resources>
+            <resource>
+                <targetPath>.</targetPath>
+                <directory>${basedir}</directory>
+                <includes>
+                    <include>config.txt.empty</include>
+                </includes>
+            </resource>
+        </resources>
     </build>
     <repositories>
         <repository>
