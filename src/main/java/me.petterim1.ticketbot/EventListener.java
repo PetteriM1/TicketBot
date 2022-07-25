@@ -88,7 +88,7 @@ public class EventListener extends ListenerAdapter {
                                     Main.SCHEDULER.schedule(() -> {
                                         TextChannel checkChannel = Main.JDA.getTextChannelById(channelId);
                                         if (checkChannel != null) {
-                                            checkChannel.getHistory().retrievePast(100).queue((messages) -> {
+                                            checkChannel.getHistory().retrievePast(20).queue((messages) -> {
                                                 for (Message message : messages) {
                                                     if (message.getAuthor().getIdLong() == Main.JDA.getSelfUser().getIdLong() && !message.getActionRows().isEmpty() && !message.getActionRows().get(0).getComponents().isEmpty()) {
                                                         if (ElementID.PNL_CATEGORY.equals(message.getActionRows().get(0).getComponents().get(0).getId())) {
@@ -118,38 +118,40 @@ public class EventListener extends ListenerAdapter {
                 if (channel == null) {
                     log("Failed to find TextChannel where close confirmation button was clicked!");
                 } else {
-                    TextChannel logChannel = Main.JDA.getTextChannelById(CONFIG.getProperty("tickets_log_channel"));
-                    if (logChannel == null) {
-                        log("tickets_log_channel is null!");
-                        channel.delete().queue();
-                    } else {
-                        channel.getHistory().retrievePast(100).queue((messages) -> {
-                            StringBuilder chatLog = new StringBuilder(channel.getName());
-                            if (channel.getParent() != null) {
-                                chatLog.append(" in ").append(channel.getParent().getName());
-                            }
-                            chatLog.append(" was created ").append(channel.getTimeCreated()).append("\n\n");
-                            ListIterator<Message> reverse = messages.listIterator(messages.size());
-                            while (reverse.hasPrevious()) {
-                                Message message = reverse.previous();
-                                if (message.getAuthor().getIdLong() != Main.JDA.getSelfUser().getIdLong()) {
-                                    chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
+                    event.getInteraction().reply(CONFIG.getProperty("ticket_close_reply", "ticket_close_reply")).setEphemeral(true).queue((x) -> {
+                        TextChannel logChannel = Main.JDA.getTextChannelById(CONFIG.getProperty("tickets_log_channel"));
+                        if (logChannel == null) {
+                            log("tickets_log_channel is null!");
+                            channel.delete().queue();
+                        } else {
+                            channel.getHistory().retrievePast(100).queue((messages) -> {
+                                StringBuilder chatLog = new StringBuilder(channel.getName());
+                                if (channel.getParent() != null) {
+                                    chatLog.append(" in ").append(channel.getParent().getName());
                                 }
-                            }
-                            chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
-                            File file;
-                            try {
-                                file = Files.write(Paths.get( channel.getName() + ".txt"), chatLog.toString().getBytes()).toFile();
-                            } catch (IOException e) {
-                                channel.delete().queue();
-                                throw new RuntimeException(e);
-                            }
-                            logChannel.sendFile(file).queue((then) -> {
-                                channel.delete().queue();
-                                file.delete();
+                                chatLog.append(" was created ").append(channel.getTimeCreated()).append("\n\n");
+                                ListIterator<Message> reverse = messages.listIterator(messages.size());
+                                while (reverse.hasPrevious()) {
+                                    Message message = reverse.previous();
+                                    if (message.getAuthor().getIdLong() != Main.JDA.getSelfUser().getIdLong()) {
+                                        chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
+                                    }
+                                }
+                                chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
+                                File file;
+                                try {
+                                    file = Files.write(Paths.get( channel.getName() + ".txt"), chatLog.toString().getBytes()).toFile();
+                                } catch (IOException e) {
+                                    channel.delete().queue();
+                                    throw new RuntimeException(e);
+                                }
+                                logChannel.sendFile(file).queue((then) -> {
+                                    channel.delete().queue();
+                                    file.delete();
+                                });
                             });
-                        });
-                    }
+                        }
+                    });
                 }
             }
         } else {
@@ -167,11 +169,18 @@ public class EventListener extends ListenerAdapter {
                 if (split.length == 2 && ElementID.ROW_VALUE.equals(split[0])) {
                     int selected = Integer.parseInt(split[1]);
                     MessageChannel channel = event.getChannel();
-                    channel.getHistory().retrievePast(1).queue((messages) -> {
+                    channel.getHistory().retrievePast(20).queue((messages) -> {
                         for (Message message : messages) {
                             if (message.getAuthor().getIdLong() == Main.JDA.getSelfUser().getIdLong() && !message.getEmbeds().isEmpty()) {
                                 message.delete().queue((then) -> {
-                                    //TODO: move channel
+                                    Category parent = Main.JDA.getCategoryById(CONFIG.getProperty("category_id_for_" + selected));
+                                    if (parent == null) {
+                                        log("category_id_for_" + selected + " is null!");
+                                    } else if (!(channel instanceof GuildChannel)) {
+                                        log("MessageChannel is not a GuildChannel!");
+                                    } else {
+                                        ((GuildChannel) channel).getManager().setParent(parent).queue();
+                                    }
                                     String supportRoleId = CONFIG.getProperty("ping_support_role_id_" + selected);
                                     if (supportRoleId != null && !supportRoleId.isEmpty()) {
                                         /*Role supportRole = Main.JDA.getRoleById(supportRoleId);

@@ -55,7 +55,7 @@ public class Main {
         if (channel == null) {
             log("tickets_panel_channel is null!");
         } else {
-            channel.getHistory().retrievePast(1).queue((messages) -> {
+            channel.getHistory().retrievePast(20).queue((messages) -> {
                 for (Message message : messages) {
                     if (message.getAuthor().getIdLong() == JDA.getSelfUser().getIdLong() && !message.getEmbeds().isEmpty()) {
                         message.delete().queue();
