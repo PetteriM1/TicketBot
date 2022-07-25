@@ -13,11 +13,14 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class Main {
 
     static JDA JDA;
-    static Properties CONFIG = new Properties();
+    static final Properties CONFIG = new Properties();
+    static final ScheduledExecutorService SCHEDULER = Executors.newSingleThreadScheduledExecutor();
 
     public static void main(String[] args) throws InterruptedException, LoginException, IOException {
         log("Discord ticket bot made by PetteriM1");

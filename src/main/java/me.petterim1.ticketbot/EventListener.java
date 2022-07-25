@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.concurrent.TimeUnit;
 
 import static me.petterim1.ticketbot.Main.CONFIG;
 import static me.petterim1.ticketbot.Main.log;
@@ -81,7 +82,27 @@ public class EventListener extends ListenerAdapter {
                                                     .withEmoji(Emoji.fromUnicode("❓")));
                                 }
                                 channel.sendMessageEmbeds(embed.build())
-                                        .setActionRow(SelectionMenu.create(ElementID.PNL_CATEGORY).addOptions(ticketTypes).build()).queue(); //TODO: close ticket if no category selected
+                                        .setActionRow(SelectionMenu.create(ElementID.PNL_CATEGORY).addOptions(ticketTypes).build()).queue();
+                                long channelId = channel.getIdLong();
+                                try {
+                                    Main.SCHEDULER.schedule(() -> {
+                                        TextChannel checkChannel = Main.JDA.getTextChannelById(channelId);
+                                        if (checkChannel != null) {
+                                            checkChannel.getHistory().retrievePast(100).queue((messages) -> {
+                                                for (Message message : messages) {
+                                                    if (message.getAuthor().getIdLong() == Main.JDA.getSelfUser().getIdLong() && !message.getActionRows().isEmpty() && !message.getActionRows().get(0).getComponents().isEmpty()) {
+                                                        if (ElementID.PNL_CATEGORY.equals(message.getActionRows().get(0).getComponents().get(0).getId())) {
+                                                            checkChannel.sendMessage(CONFIG.getProperty("category_panel_timeout_message", "category_panel_timeout_message")).queue((then) -> checkChannel.delete().queue());
+                                                            return;
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }, Integer.parseInt(CONFIG.getProperty("category_panel_timeout_seconds")), TimeUnit.SECONDS);
+                                } catch (NumberFormatException e) {
+                                    throw new RuntimeException("category_panel_timeout_seconds must be a positive integer!");
+                                }
                             });
                 }
             } else if (ElementID.BTN_CLOSE_TICKET.equals(buttonId)) {
