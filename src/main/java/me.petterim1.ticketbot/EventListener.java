@@ -14,9 +14,15 @@ import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
 import javax.annotation.Nonnull;
 
 import java.awt.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.ListIterator;
 
 import static me.petterim1.ticketbot.Main.CONFIG;
 import static me.petterim1.ticketbot.Main.log;
@@ -57,7 +63,7 @@ public class EventListener extends ListenerAdapter {
                             .setTopic(member.getId())
                             .addMemberPermissionOverride(Main.JDA.getSelfUser().getIdLong(), viewAndWrite, null)
                             .addMemberPermissionOverride(member.getIdLong(), userPermissions, /*typesCount < 2 ? null :*/ EnumSet.of(Permission.MESSAGE_WRITE))
-                            .addRolePermissionOverride(Long.parseLong(CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null)
+                            .addRolePermissionOverride(Long.parseLong(CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
                             .addPermissionOverride(guild.getPublicRole(), null, viewAndWrite)
                             .queue((channel) -> {
                                 event.getInteraction().reply(CONFIG.getProperty("tickets_panel_reply_channel_created", "tickets_panel_reply_channel_created") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
@@ -91,8 +97,38 @@ public class EventListener extends ListenerAdapter {
                 if (channel == null) {
                     log("Failed to find TextChannel where close confirmation button was clicked!");
                 } else {
-                    //TODO: save the ticket
-                    channel.delete().queue();
+                    TextChannel logChannel = Main.JDA.getTextChannelById(CONFIG.getProperty("tickets_log_channel"));
+                    if (logChannel == null) {
+                        log("tickets_log_channel is null!");
+                        channel.delete().queue();
+                    } else {
+                        channel.getHistory().retrievePast(100).queue((messages) -> {
+                            StringBuilder chatLog = new StringBuilder(channel.getName());
+                            if (channel.getParent() != null) {
+                                chatLog.append(" in ").append(channel.getParent().getName());
+                            }
+                            chatLog.append(" was created ").append(channel.getTimeCreated()).append("\n\n");
+                            ListIterator<Message> reverse = messages.listIterator(messages.size());
+                            while (reverse.hasPrevious()) {
+                                Message message = reverse.previous();
+                                if (message.getAuthor().getIdLong() != Main.JDA.getSelfUser().getIdLong()) {
+                                    chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
+                                }
+                            }
+                            chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
+                            File file;
+                            try {
+                                file = Files.write(Paths.get( channel.getName() + ".txt"), chatLog.toString().getBytes()).toFile();
+                            } catch (IOException e) {
+                                channel.delete().queue();
+                                throw new RuntimeException(e);
+                            }
+                            logChannel.sendFile(file).queue((then) -> {
+                                channel.delete().queue();
+                                file.delete();
+                            });
+                        });
+                    }
                 }
             }
         } else {
@@ -114,6 +150,7 @@ public class EventListener extends ListenerAdapter {
                         for (Message message : messages) {
                             if (message.getAuthor().getIdLong() == Main.JDA.getSelfUser().getIdLong() && !message.getEmbeds().isEmpty()) {
                                 message.delete().queue((then) -> {
+                                    //TODO: move channel
                                     String supportRoleId = CONFIG.getProperty("ping_support_role_id_" + selected);
                                     if (supportRoleId != null && !supportRoleId.isEmpty()) {
                                         /*Role supportRole = Main.JDA.getRoleById(supportRoleId);
