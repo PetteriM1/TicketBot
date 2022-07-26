@@ -52,19 +52,18 @@ public class EventListener extends ListenerAdapter {
                     } catch (NumberFormatException e) {
                         throw new RuntimeException("category_panel_categories must be a positive integer!");
                     }
+                    EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE);
                     EnumSet<Permission> userPermissions;
                     //if (typesCount < 2) {
-                        //userPermissions = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE); //TODO: if typesCount < 2, no category selection needed, set support role permission
+                        //userPermissions = viewAndWrite; //TODO: if typesCount < 2, no category selection needed, set support role permission
                     //} else {
                         userPermissions = EnumSet.of(Permission.VIEW_CHANNEL);
                     //}
-                    EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE);
                     guild.createTextChannel(CONFIG.getProperty("ticket_prefix") + member.getEffectiveName())
                             .setParent(category)
                             .setTopic(member.getId())
                             .addMemberPermissionOverride(Main.JDA.getSelfUser().getIdLong(), viewAndWrite, null)
                             .addMemberPermissionOverride(member.getIdLong(), userPermissions, /*typesCount < 2 ? null :*/ EnumSet.of(Permission.MESSAGE_WRITE))
-                            .addRolePermissionOverride(Long.parseLong(CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
                             .addPermissionOverride(guild.getPublicRole(), null, viewAndWrite)
                             .queue((channel) -> {
                                 event.getInteraction().reply(CONFIG.getProperty("tickets_panel_reply_channel_created", "tickets_panel_reply_channel_created") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
@@ -179,12 +178,16 @@ public class EventListener extends ListenerAdapter {
                                     } else if (!(channel instanceof GuildChannel)) {
                                         log("MessageChannel is not a GuildChannel!");
                                     } else {
-                                        ((GuildChannel) channel).getManager().setParent(parent).queue();
+                                        EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE);
+                                        ((GuildChannel) channel).getManager().setParent(parent)
+                                                .putMemberPermissionOverride(member.getIdLong(), viewAndWrite, null)
+                                                .putRolePermissionOverride(Long.parseLong(CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
+                                                .queue();
                                     }
                                     String supportRoleId = CONFIG.getProperty("ping_support_role_id_" + selected);
                                     if (supportRoleId != null && !supportRoleId.isEmpty()) {
                                         /*Role supportRole = Main.JDA.getRoleById(supportRoleId);
-                                        if (supportRole != null) { //TODO: fix permission issue
+                                        if (supportRole != null) { //TODO: use ChannelManager on move
                                             ((TextChannel) channel).putPermissionOverride(supportRole).setAllow(EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE)).queue();
                                         }*/
                                         channel.sendMessage("<@&" + supportRoleId + ">").queue();
@@ -195,9 +198,6 @@ public class EventListener extends ListenerAdapter {
                                     embed.setDescription(CONFIG.getProperty("report_info_text_" + selected, "report_info_text_" + selected));
                                     channel.sendMessageEmbeds(embed.build())
                                             .setActionRow(Button.of(ButtonStyle.DANGER, ElementID.BTN_CLOSE_TICKET, CONFIG.getProperty("ticket_close_button_text", "ticket_close_button_text"), Emoji.fromUnicode("❌"))).queue();
-                                    if (!member.hasPermission(Permission.ADMINISTRATOR)) {
-                                        ((TextChannel) channel).putPermissionOverride(member).setAllow(Permission.MESSAGE_WRITE).queue();
-                                    }
                                 });
                             }
                         }
