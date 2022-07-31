@@ -47,7 +47,7 @@ public class CommandListener extends ListenerAdapter {
                             embed.setColor(Color.PINK);
                             embed.setAuthor(CONFIG.getProperty("ticket_close_confirmation_title", "ticket_close_confirmation_title"));
                             embed.setDescription(CONFIG.getProperty("ticket_close_confirmation_text", "ticket_close_confirmation_text"));
-                            event.getChannel().sendMessageEmbeds(embed.build()).setActionRow(
+                            event.getMessage().replyEmbeds(embed.build()).setActionRow(
                                     Button.of(ButtonStyle.PRIMARY, ElementID.BTN_CLOSE_TICKET_CONFIRM, CONFIG.getProperty("ticket_close_confirmation_button_text", "ticket_close_confirmation_button_text"))
                             ).queue();
                         }
