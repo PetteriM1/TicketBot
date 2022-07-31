@@ -35,6 +35,10 @@ public class Main {
         JDA.getPresence().setActivity(Activity.of(Activity.ActivityType.valueOf(CONFIG.getProperty("bot_activity_type")), CONFIG.getProperty("bot_activity_text")));
         log("Registering event listener...");
         JDA.addEventListener(new EventListener());
+        if (CONFIG.getProperty("enable_commands", "").equalsIgnoreCase("true")) {
+            log("Registering command listener...");
+            JDA.addEventListener(new CommandListener());
+        }
         log("Preparing ticket panel channel...");
         prepareChannel();
         log("The bot is online!");
