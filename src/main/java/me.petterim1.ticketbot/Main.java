@@ -35,7 +35,7 @@ public class Main {
         JDA.getPresence().setActivity(Activity.of(Activity.ActivityType.valueOf(CONFIG.getProperty("bot_activity_type")), CONFIG.getProperty("bot_activity_text")));
         log("Registering event listener...");
         JDA.addEventListener(new EventListener());
-        if (CONFIG.getProperty("enable_commands", "").equalsIgnoreCase("true")) {
+        if (CONFIG.getProperty("enable_commands", "false").equalsIgnoreCase("true")) {
             log("Registering command listener...");
             JDA.addEventListener(new CommandListener());
         }
@@ -59,10 +59,16 @@ public class Main {
         if (channel == null) {
             log("tickets_panel_channel is null!");
         } else {
+            boolean forceUpdate = CONFIG.getProperty("force_panel_update_on_startup", "true").equalsIgnoreCase("true");
             channel.getHistory().retrievePast(20).queue((messages) -> {
                 for (Message message : messages) {
                     if (message.getAuthor().getIdLong() == JDA.getSelfUser().getIdLong() && !message.getEmbeds().isEmpty()) {
-                        message.delete().queue();
+                        if (!forceUpdate) {
+                            log("No panel update (force_panel_update_on_startup=false)");
+                            return;
+                        } else {
+                            message.delete().queue();
+                        }
                     }
                 }
                 createPanel(channel);

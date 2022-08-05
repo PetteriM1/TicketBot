@@ -3,6 +3,7 @@ bot_activity_type=DEFAULT
 bot_activity_text=with tickets
 ticket_prefix=ticket-
 ticket_access_role_id=
+force_panel_update_on_startup=true
 enable_commands=false
 command_prefix=+
 ticket_close_button_text=Close the ticket
