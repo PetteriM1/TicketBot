@@ -117,40 +117,61 @@ public class EventListener extends ListenerAdapter {
                 if (channel == null) {
                     log("Failed to find TextChannel where close confirmation button was clicked!");
                 } else {
-                    event.getInteraction().reply(CONFIG.getProperty("ticket_close_reply", "ticket_close_reply")).setEphemeral(true).queue((x) -> {
-                        TextChannel logChannel = Main.JDA.getTextChannelById(CONFIG.getProperty("tickets_log_channel"));
-                        if (logChannel == null) {
-                            log("tickets_log_channel is null!");
-                            channel.delete().queue();
-                        } else {
-                            channel.getHistory().retrievePast(100).queue((messages) -> {
-                                StringBuilder chatLog = new StringBuilder(channel.getName());
-                                if (channel.getParent() != null) {
-                                    chatLog.append(" in ").append(channel.getParent().getName());
-                                }
-                                chatLog.append(" was created ").append(channel.getTimeCreated()).append("\n\n");
-                                ListIterator<Message> reverse = messages.listIterator(messages.size());
-                                while (reverse.hasPrevious()) {
-                                    Message message = reverse.previous();
-                                    if (message.getAuthor().getIdLong() != Main.JDA.getSelfUser().getIdLong()) {
-                                        chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
-                                    }
-                                }
-                                chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
-                                File file;
-                                try {
-                                    file = Files.write(Paths.get( channel.getName() + ".txt"), chatLog.toString().getBytes()).toFile();
-                                } catch (IOException e) {
-                                    channel.delete().queue();
-                                    throw new RuntimeException(e);
-                                }
-                                logChannel.sendFile(file).queue((then) -> {
-                                    channel.delete().queue();
-                                    file.delete();
-                                });
-                            });
+                    Category category = channel.getParent();
+                    if (category != null) {
+                        int typesCount;
+                        try {
+                            typesCount = Integer.parseInt(CONFIG.getProperty("category_panel_categories"));
+                        } catch (NumberFormatException e) {
+                            throw new RuntimeException("category_panel_categories must be a positive integer!");
                         }
-                    });
+                        boolean inTicketCategory = false;
+                        for (int i = 1; i <= typesCount; i++) {
+                            String ticketCategory = CONFIG.getProperty("category_id_for_" + i);
+                            if (category.getId().equals(ticketCategory)) {
+                                inTicketCategory = true;
+                                break;
+                            }
+                        }
+                        if (inTicketCategory) {
+                            event.getInteraction().reply(CONFIG.getProperty("ticket_close_reply", "ticket_close_reply")).setEphemeral(true).queue((x) -> {
+                                TextChannel logChannel = Main.JDA.getTextChannelById(CONFIG.getProperty("tickets_log_channel"));
+                                if (logChannel == null) {
+                                    log("tickets_log_channel is null!");
+                                    channel.delete().queue();
+                                } else {
+                                    channel.getHistory().retrievePast(100).queue((messages) -> {
+                                        StringBuilder chatLog = new StringBuilder(channel.getName());
+                                        if (channel.getParent() != null) {
+                                            chatLog.append(" in ").append(channel.getParent().getName());
+                                        }
+                                        chatLog.append(" was created ").append(channel.getTimeCreated()).append("\n\n");
+                                        ListIterator<Message> reverse = messages.listIterator(messages.size());
+                                        while (reverse.hasPrevious()) {
+                                            Message message = reverse.previous();
+                                            if (message.getAuthor().getIdLong() != Main.JDA.getSelfUser().getIdLong()) {
+                                                chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
+                                            }
+                                        }
+                                        chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
+                                        File file;
+                                        try {
+                                            file = Files.write(Paths.get(channel.getName() + ".txt"), chatLog.toString().getBytes()).toFile();
+                                        } catch (IOException e) {
+                                            channel.delete().queue();
+                                            throw new RuntimeException(e);
+                                        }
+                                        logChannel.sendFile(file).queue((then) -> {
+                                            channel.delete().queue();
+                                            file.delete();
+                                        });
+                                    });
+                                }
+                            });
+                            return;
+                        }
+                    }
+                    event.getInteraction().reply(CONFIG.getProperty("ticket_close_error", "ticket_close_error")).setEphemeral(true).queue();
                 }
             }
         } else {
