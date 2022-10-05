@@ -199,7 +199,7 @@ public class EventListener extends ListenerAdapter {
                                     } else if (!(channel instanceof GuildChannel)) {
                                         log("MessageChannel is not a GuildChannel!");
                                     } else {
-                                        EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE);
+                                        EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE, Permission.MESSAGE_ATTACH_FILES);
                                         ((GuildChannel) channel).getManager().setParent(parent)
                                                 .putMemberPermissionOverride(member.getIdLong(), viewAndWrite, null)
                                                 .putRolePermissionOverride(Long.parseLong(CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
