@@ -175,7 +175,7 @@ public class EventListener extends ListenerAdapter {
                 }
             }
         } else {
-            log("Malformed ButtonClickEvent data!");
+            //log("Malformed ButtonClickEvent data!");
         }
     }
 
@@ -226,7 +226,7 @@ public class EventListener extends ListenerAdapter {
                 }
             }
         } else {
-            log("Malformed SelectionMenuEvent data!");
+            //log("Malformed SelectionMenuEvent data!");
         }
     }
 }

@@ -38,6 +38,10 @@ public class Main {
         if (CONFIG.getProperty("enable_commands", "false").equalsIgnoreCase("true")) {
             log("Registering command listener...");
             JDA.addEventListener(new CommandListener());
+            log("Registering slash commands...");
+            JDA.upsertCommand("close", CONFIG.getProperty("ticket_close_button_text", "ticket_close_button_text")).queue();
+            //JDA.upsertCommand("add", "Add more people to this channel").queue();
+            //JDA.upsertCommand("remove", "Remove people from this channel").queue();
         }
         log("Preparing ticket panel channel...");
         prepareChannel();
