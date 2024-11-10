@@ -1,4 +1,4 @@
-package me.petterim1.ticketbot;
+package petterim1.ticketbot;
 
 public interface ElementID {
 

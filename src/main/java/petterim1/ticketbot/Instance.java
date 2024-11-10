@@ -1,32 +1,32 @@
-package me.petterim1.ticketbot;
+package petterim1.ticketbot;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.*;
+import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.entities.Emoji;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.interactions.components.Button;
 import net.dv8tion.jda.api.interactions.components.ButtonStyle;
 
 import javax.security.auth.login.LoginException;
 import java.awt.*;
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.Properties;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
-public class Main {
+import static petterim1.ticketbot.Main.log;
 
-    static JDA JDA;
-    static final Properties CONFIG = new Properties();
-    static final ScheduledExecutorService SCHEDULER = Executors.newSingleThreadScheduledExecutor();
+public class Instance {
 
-    public static void main(String[] args) throws InterruptedException, LoginException, IOException {
-        log("Discord ticket bot made by PetteriM1");
-        log("---------------------");
-        log("Loading config...");
-        loadConfig();
+    final JDA JDA;
+    final Properties CONFIG = new Properties();
+
+    Instance(String name) throws InterruptedException, LoginException, IOException {
+        log("Loading " + name + "...");
+        loadConfig("instances/" + name);
+
         log("Logging in to Discord...");
         JDA = JDABuilder.createDefault(CONFIG.getProperty("bot_token")).build();
         log("Waiting JDA to load...");
@@ -34,31 +34,32 @@ public class Main {
         log("Setting bot status to " + CONFIG.getProperty("bot_activity_type") + " " + CONFIG.getProperty("bot_activity_text"));
         JDA.getPresence().setActivity(Activity.of(Activity.ActivityType.valueOf(CONFIG.getProperty("bot_activity_type")), CONFIG.getProperty("bot_activity_text")));
         log("Registering event listener...");
-        JDA.addEventListener(new EventListener());
+        JDA.addEventListener(new EventListener(this));
+
+        prepareCommands();
+        prepareChannel();
+    }
+
+    private void loadConfig(String name) throws IOException {
+        FileInputStream propsInput = new FileInputStream(name);
+        CONFIG.load(propsInput);
+        propsInput.close();
+    }
+
+    void prepareCommands() {
         if (CONFIG.getProperty("enable_commands", "false").equalsIgnoreCase("true")) {
             log("Registering command listener...");
-            JDA.addEventListener(new CommandListener());
+            JDA.addEventListener(new CommandListener(this));
             log("Registering slash commands...");
             JDA.upsertCommand("close", CONFIG.getProperty("ticket_close_button_text", "ticket_close_button_text")).queue();
             //JDA.upsertCommand("add", "Add more people to this channel").queue();
             //JDA.upsertCommand("remove", "Remove people from this channel").queue();
         }
+    }
+
+    void prepareChannel() {
         log("Preparing ticket panel channel...");
-        prepareChannel();
-        log("The bot is online!");
-    }
 
-    private static void loadConfig() throws IOException {
-        if (!new File("config.txt").exists()) {
-            log("No config.txt found, creating an empty config...");
-            exportDefaultConfig();
-        }
-        FileInputStream propsInput = new FileInputStream("config.txt");
-        CONFIG.load(propsInput);
-        propsInput.close();
-    }
-
-    private static void prepareChannel() {
         TextChannel channel = JDA.getTextChannelById(CONFIG.getProperty("tickets_panel_channel"));
         if (channel == null) {
             log("tickets_panel_channel is null!");
@@ -80,40 +81,12 @@ public class Main {
         }
     }
 
-    private static void createPanel(TextChannel channel) {
+    private void createPanel(TextChannel channel) {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setColor(Color.RED);
         embed.setAuthor(CONFIG.getProperty("tickets_panel_title", "tickets_panel_title"));
         embed.setDescription(CONFIG.getProperty("tickets_panel_text", "tickets_panel_text"));
         channel.sendMessageEmbeds(embed.build())
                 .setActionRow(Button.of(ButtonStyle.PRIMARY, ElementID.BTN_OPEN_TICKET, CONFIG.getProperty("tickets_panel_button_text", "tickets_panel_button_text"), Emoji.fromUnicode("\uD83C\uDFAB"))).queue();
-    }
-
-    static void log(String text) {
-        System.out.println(text);
-    }
-
-    private static void exportDefaultConfig() throws IOException {
-        InputStream stream = null;
-        OutputStream resStreamOut = null;
-        try {
-            stream = Main.class.getClassLoader().getResourceAsStream("config.txt.empty");
-            if (stream == null) {
-                throw new RuntimeException("Cannot get 'config.txt.empty' from the jar file!");
-            }
-            resStreamOut = Files.newOutputStream(Paths.get(new File("config.txt").toURI()));
-            byte[] buffer = new byte[4096];
-            int readBytes;
-            while ((readBytes = stream.read(buffer)) > 0) {
-                resStreamOut.write(buffer, 0, readBytes);
-            }
-        } finally {
-            if (stream != null) {
-                stream.close();
-            }
-            if (resStreamOut != null) {
-                resStreamOut.close();
-            }
-        }
     }
 }

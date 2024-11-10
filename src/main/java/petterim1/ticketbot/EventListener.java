@@ -1,4 +1,4 @@
-package me.petterim1.ticketbot;
+package petterim1.ticketbot;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
@@ -19,16 +19,19 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.EnumSet;
+import java.util.*;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.concurrent.TimeUnit;
 
-import static me.petterim1.ticketbot.Main.CONFIG;
-import static me.petterim1.ticketbot.Main.log;
+import static petterim1.ticketbot.Main.log;
 
 public class EventListener extends ListenerAdapter {
+
+    private final Instance INSTANCE;
+
+    EventListener(Instance INSTANCE) {
+        this.INSTANCE = INSTANCE;
+    }
 
     public void onButtonClick(@Nonnull ButtonClickEvent event) {
         Guild guild = event.getGuild();
@@ -38,17 +41,17 @@ public class EventListener extends ListenerAdapter {
             if (ElementID.BTN_OPEN_TICKET.equals(buttonId)) {
                 for (TextChannel channel : guild.getTextChannels()) {
                     if (member.getId().equals(channel.getTopic())) {
-                        event.getInteraction().reply(CONFIG.getProperty("tickets_panel_reply_channel_exists", "tickets_panel_reply_channel_exists") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
+                        event.getInteraction().reply(INSTANCE.CONFIG.getProperty("tickets_panel_reply_channel_exists", "tickets_panel_reply_channel_exists") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
                         return;
                     }
                 }
-                Category category = guild.getCategoryById(CONFIG.getProperty("new_ticket_channels_category"));
+                Category category = guild.getCategoryById(INSTANCE.CONFIG.getProperty("new_ticket_channels_category"));
                 if (category == null) {
                     log("new_ticket_channels_category is null!");
                 } else {
                     int typesCount;
                     try {
-                        typesCount = Integer.parseInt(CONFIG.getProperty("category_panel_categories"));
+                        typesCount = Integer.parseInt(INSTANCE.CONFIG.getProperty("category_panel_categories"));
                     } catch (NumberFormatException e) {
                         throw new RuntimeException("category_panel_categories must be a positive integer!");
                     }
@@ -59,25 +62,25 @@ public class EventListener extends ListenerAdapter {
                     //} else {
                         userPermissions = EnumSet.of(Permission.VIEW_CHANNEL);
                     //}
-                    guild.createTextChannel(CONFIG.getProperty("ticket_prefix") + member.getEffectiveName())
+                    guild.createTextChannel(INSTANCE.CONFIG.getProperty("ticket_prefix") + member.getEffectiveName())
                             .setParent(category)
                             .setTopic(member.getId())
-                            .addMemberPermissionOverride(Main.JDA.getSelfUser().getIdLong(), viewAndWrite, null)
+                            .addMemberPermissionOverride(INSTANCE.JDA.getSelfUser().getIdLong(), viewAndWrite, null)
                             .addMemberPermissionOverride(member.getIdLong(), userPermissions, /*typesCount < 2 ? null :*/ EnumSet.of(Permission.MESSAGE_WRITE))
                             .addPermissionOverride(guild.getPublicRole(), null, viewAndWrite)
                             .queue((channel) -> {
-                                event.getInteraction().reply(CONFIG.getProperty("tickets_panel_reply_channel_created", "tickets_panel_reply_channel_created") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
+                                event.getInteraction().reply(INSTANCE.CONFIG.getProperty("tickets_panel_reply_channel_created", "tickets_panel_reply_channel_created") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
                                 EmbedBuilder embed = new EmbedBuilder();
                                 embed.setColor(Color.ORANGE);
-                                embed.setAuthor(CONFIG.getProperty("category_panel_title", "category_panel_title"));
-                                embed.setDescription(CONFIG.getProperty("category_panel_text", "category_panel_text"));
+                                embed.setAuthor(INSTANCE.CONFIG.getProperty("category_panel_title", "category_panel_title"));
+                                embed.setDescription(INSTANCE.CONFIG.getProperty("category_panel_text", "category_panel_text"));
                                 /*if (typesCount < 2) {
                                     return; //TODO: if typesCount < 2, no category selection needed, send ticket info
                                 }*/
                                 ArrayList<SelectOption> ticketTypes = new ArrayList<>();
                                 for (int i = 1; i <= typesCount; i++) {
-                                    ticketTypes.add(SelectOption.of(CONFIG.getProperty("category_panel_category_name_" + i, "category_panel_category_name_" + i), ElementID.ROW_VALUE + "=" + i)
-                                                    .withDescription(CONFIG.getProperty("category_panel_description_" + i, "category_panel_description_" + i))
+                                    ticketTypes.add(SelectOption.of(INSTANCE.CONFIG.getProperty("category_panel_category_name_" + i, "category_panel_category_name_" + i), ElementID.ROW_VALUE + "=" + i)
+                                                    .withDescription(INSTANCE.CONFIG.getProperty("category_panel_description_" + i, "category_panel_description_" + i))
                                                     .withEmoji(Emoji.fromUnicode("❓")));
                                 }
                                 channel.sendMessageEmbeds(embed.build())
@@ -85,20 +88,20 @@ public class EventListener extends ListenerAdapter {
                                 long channelId = channel.getIdLong();
                                 try {
                                     Main.SCHEDULER.schedule(() -> {
-                                        TextChannel checkChannel = Main.JDA.getTextChannelById(channelId);
+                                        TextChannel checkChannel = INSTANCE.JDA.getTextChannelById(channelId);
                                         if (checkChannel != null) {
                                             checkChannel.getHistory().retrievePast(20).queue((messages) -> {
                                                 for (Message message : messages) {
-                                                    if (message.getAuthor().getIdLong() == Main.JDA.getSelfUser().getIdLong() && !message.getActionRows().isEmpty() && !message.getActionRows().get(0).getComponents().isEmpty()) {
+                                                    if (message.getAuthor().getIdLong() == INSTANCE.JDA.getSelfUser().getIdLong() && !message.getActionRows().isEmpty() && !message.getActionRows().get(0).getComponents().isEmpty()) {
                                                         if (ElementID.PNL_CATEGORY.equals(message.getActionRows().get(0).getComponents().get(0).getId())) {
-                                                            checkChannel.sendMessage(CONFIG.getProperty("category_panel_timeout_message", "category_panel_timeout_message")).queue((then) -> checkChannel.delete().queue());
+                                                            checkChannel.sendMessage(INSTANCE.CONFIG.getProperty("category_panel_timeout_message", "category_panel_timeout_message")).queue((then) -> checkChannel.delete().queue());
                                                             return;
                                                         }
                                                     }
                                                 }
                                             });
                                         }
-                                    }, Integer.parseInt(CONFIG.getProperty("category_panel_timeout_seconds")), TimeUnit.SECONDS);
+                                    }, Integer.parseInt(INSTANCE.CONFIG.getProperty("category_panel_timeout_seconds")), TimeUnit.SECONDS);
                                 } catch (NumberFormatException e) {
                                     throw new RuntimeException("category_panel_timeout_seconds must be a positive integer!");
                                 }
@@ -107,10 +110,10 @@ public class EventListener extends ListenerAdapter {
             } else if (ElementID.BTN_CLOSE_TICKET.equals(buttonId)) {
                 EmbedBuilder embed = new EmbedBuilder();
                 embed.setColor(Color.PINK);
-                embed.setAuthor(CONFIG.getProperty("ticket_close_confirmation_title", "ticket_close_confirmation_title"));
-                embed.setDescription(CONFIG.getProperty("ticket_close_confirmation_text", "ticket_close_confirmation_text"));
+                embed.setAuthor(INSTANCE.CONFIG.getProperty("ticket_close_confirmation_title", "ticket_close_confirmation_title"));
+                embed.setDescription(INSTANCE.CONFIG.getProperty("ticket_close_confirmation_text", "ticket_close_confirmation_text"));
                 event.getInteraction().replyEmbeds(embed.build()).addActionRow(
-                        Button.of(ButtonStyle.PRIMARY, ElementID.BTN_CLOSE_TICKET_CONFIRM, CONFIG.getProperty("ticket_close_confirmation_button_text", "ticket_close_confirmation_button_text"))
+                        Button.of(ButtonStyle.PRIMARY, ElementID.BTN_CLOSE_TICKET_CONFIRM, INSTANCE.CONFIG.getProperty("ticket_close_confirmation_button_text", "ticket_close_confirmation_button_text"))
                 ).setEphemeral(true).queue();
             } else if (ElementID.BTN_CLOSE_TICKET_CONFIRM.equals(buttonId)) {
                 TextChannel channel = guild.getTextChannelById(event.getChannel().getId());
@@ -121,21 +124,21 @@ public class EventListener extends ListenerAdapter {
                     if (category != null) {
                         int typesCount;
                         try {
-                            typesCount = Integer.parseInt(CONFIG.getProperty("category_panel_categories"));
+                            typesCount = Integer.parseInt(INSTANCE.CONFIG.getProperty("category_panel_categories"));
                         } catch (NumberFormatException e) {
                             throw new RuntimeException("category_panel_categories must be a positive integer!");
                         }
                         boolean inTicketCategory = false;
                         for (int i = 1; i <= typesCount; i++) {
-                            String ticketCategory = CONFIG.getProperty("category_id_for_" + i);
+                            String ticketCategory = INSTANCE.CONFIG.getProperty("category_id_for_" + i);
                             if (category.getId().equals(ticketCategory)) {
                                 inTicketCategory = true;
                                 break;
                             }
                         }
                         if (inTicketCategory) {
-                            event.getInteraction().reply(CONFIG.getProperty("ticket_close_reply", "ticket_close_reply")).setEphemeral(true).queue((x) -> {
-                                TextChannel logChannel = Main.JDA.getTextChannelById(CONFIG.getProperty("tickets_log_channel"));
+                            event.getInteraction().reply(INSTANCE.CONFIG.getProperty("ticket_close_reply", "ticket_close_reply")).setEphemeral(true).queue((x) -> {
+                                TextChannel logChannel = INSTANCE.JDA.getTextChannelById(INSTANCE.CONFIG.getProperty("tickets_log_channel"));
                                 if (logChannel == null) {
                                     log("tickets_log_channel is null!");
                                     channel.delete().queue();
@@ -149,7 +152,7 @@ public class EventListener extends ListenerAdapter {
                                         ListIterator<Message> reverse = messages.listIterator(messages.size());
                                         while (reverse.hasPrevious()) {
                                             Message message = reverse.previous();
-                                            if (message.getAuthor().getIdLong() != Main.JDA.getSelfUser().getIdLong()) {
+                                            if (message.getAuthor().getIdLong() != INSTANCE.JDA.getSelfUser().getIdLong()) {
                                                 chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
                                             }
                                         }
@@ -171,7 +174,7 @@ public class EventListener extends ListenerAdapter {
                             return;
                         }
                     }
-                    event.getInteraction().reply(CONFIG.getProperty("ticket_close_error", "ticket_close_error")).setEphemeral(true).queue();
+                    event.getInteraction().reply(INSTANCE.CONFIG.getProperty("ticket_close_error", "ticket_close_error")).setEphemeral(true).queue();
                 }
             }
         } else {
@@ -191,9 +194,9 @@ public class EventListener extends ListenerAdapter {
                     MessageChannel channel = event.getChannel();
                     channel.getHistory().retrievePast(20).queue((messages) -> {
                         for (Message message : messages) {
-                            if (message.getAuthor().getIdLong() == Main.JDA.getSelfUser().getIdLong() && !message.getEmbeds().isEmpty()) {
+                            if (message.getAuthor().getIdLong() == INSTANCE.JDA.getSelfUser().getIdLong() && !message.getEmbeds().isEmpty()) {
                                 message.delete().queue((then) -> {
-                                    Category parent = Main.JDA.getCategoryById(CONFIG.getProperty("category_id_for_" + selected));
+                                    Category parent = INSTANCE.JDA.getCategoryById(INSTANCE.CONFIG.getProperty("category_id_for_" + selected));
                                     if (parent == null) {
                                         log("category_id_for_" + selected + " is null!");
                                     } else if (!(channel instanceof GuildChannel)) {
@@ -202,12 +205,12 @@ public class EventListener extends ListenerAdapter {
                                         EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE, Permission.MESSAGE_ATTACH_FILES);
                                         ((GuildChannel) channel).getManager().setParent(parent)
                                                 .putMemberPermissionOverride(member.getIdLong(), viewAndWrite, null)
-                                                .putRolePermissionOverride(Long.parseLong(CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
+                                                .putRolePermissionOverride(Long.parseLong(INSTANCE.CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
                                                 .queue();
                                     }
-                                    String supportRoleId = CONFIG.getProperty("ping_support_role_id_" + selected);
+                                    String supportRoleId = INSTANCE.CONFIG.getProperty("ping_support_role_id_" + selected);
                                     if (supportRoleId != null && !supportRoleId.isEmpty()) {
-                                        /*Role supportRole = Main.JDA.getRoleById(supportRoleId);
+                                        /*Role supportRole = INSTANCE.JDA.getRoleById(supportRoleId);
                                         if (supportRole != null) { //TODO: use ChannelManager on move
                                             ((TextChannel) channel).putPermissionOverride(supportRole).setAllow(EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE)).queue();
                                         }*/
@@ -215,10 +218,10 @@ public class EventListener extends ListenerAdapter {
                                     }
                                     EmbedBuilder embed = new EmbedBuilder();
                                     embed.setColor(Color.GREEN);
-                                    embed.setAuthor(CONFIG.getProperty("report_info_title_" + selected, "report_info_title_" + selected));
-                                    embed.setDescription(CONFIG.getProperty("report_info_text_" + selected, "report_info_text_" + selected));
+                                    embed.setAuthor(INSTANCE.CONFIG.getProperty("report_info_title_" + selected, "report_info_title_" + selected));
+                                    embed.setDescription(INSTANCE.CONFIG.getProperty("report_info_text_" + selected, "report_info_text_" + selected));
                                     channel.sendMessageEmbeds(embed.build())
-                                            .setActionRow(Button.of(ButtonStyle.DANGER, ElementID.BTN_CLOSE_TICKET, CONFIG.getProperty("ticket_close_button_text", "ticket_close_button_text"), Emoji.fromUnicode("❌"))).queue();
+                                            .setActionRow(Button.of(ButtonStyle.DANGER, ElementID.BTN_CLOSE_TICKET, INSTANCE.CONFIG.getProperty("ticket_close_button_text", "ticket_close_button_text"), Emoji.fromUnicode("❌"))).queue();
                                 });
                             }
                         }

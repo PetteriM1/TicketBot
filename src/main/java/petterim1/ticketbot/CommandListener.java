@@ -1,4 +1,4 @@
-package me.petterim1.ticketbot;
+package petterim1.ticketbot;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Category;
@@ -13,10 +13,15 @@ import net.dv8tion.jda.api.interactions.components.ButtonStyle;
 import javax.annotation.Nonnull;
 import java.awt.*;
 
-import static me.petterim1.ticketbot.Main.CONFIG;
-import static me.petterim1.ticketbot.Main.log;
+import static petterim1.ticketbot.Main.log;
 
 public class CommandListener extends ListenerAdapter {
+
+    private final Instance INSTANCE;
+
+    CommandListener(Instance INSTANCE) {
+        this.INSTANCE = INSTANCE;
+    }
 
     public void onSlashCommand(@Nonnull SlashCommandEvent event) {
         Member member = event.getMember();
@@ -26,7 +31,7 @@ public class CommandListener extends ListenerAdapter {
             if (channel == null) {
                 log("Failed to find TextChannel where slash command was executed!");
             } else {
-                if (channel.getTopic() != null && channel.getName().startsWith(CONFIG.getProperty("ticket_prefix"))) {
+                if (channel.getTopic() != null && channel.getName().startsWith(INSTANCE.CONFIG.getProperty("ticket_prefix"))) {
                     try {
                         Long.parseLong(channel.getTopic());
                     } catch (NumberFormatException notATicket) {
@@ -37,13 +42,13 @@ public class CommandListener extends ListenerAdapter {
                         if (category != null) {
                             int typesCount;
                             try {
-                                typesCount = Integer.parseInt(CONFIG.getProperty("category_panel_categories"));
+                                typesCount = Integer.parseInt(INSTANCE.CONFIG.getProperty("category_panel_categories"));
                             } catch (NumberFormatException e) {
                                 throw new RuntimeException("category_panel_categories must be a positive integer!");
                             }
                             boolean inTicketCategory = false;
                             for (int i = 1; i <= typesCount; i++) {
-                                String ticketCategory = CONFIG.getProperty("category_id_for_" + i);
+                                String ticketCategory = INSTANCE.CONFIG.getProperty("category_id_for_" + i);
                                 if (category.getId().equals(ticketCategory)) {
                                     inTicketCategory = true;
                                     break;
@@ -52,10 +57,10 @@ public class CommandListener extends ListenerAdapter {
                             if (inTicketCategory) {
                                 EmbedBuilder embed = new EmbedBuilder();
                                 embed.setColor(Color.PINK);
-                                embed.setAuthor(CONFIG.getProperty("ticket_close_confirmation_title", "ticket_close_confirmation_title"));
-                                embed.setDescription(CONFIG.getProperty("ticket_close_confirmation_text", "ticket_close_confirmation_text"));
+                                embed.setAuthor(INSTANCE.CONFIG.getProperty("ticket_close_confirmation_title", "ticket_close_confirmation_title"));
+                                embed.setDescription(INSTANCE.CONFIG.getProperty("ticket_close_confirmation_text", "ticket_close_confirmation_text"));
                                 event.replyEmbeds(embed.build()).addActionRow(
-                                        Button.of(ButtonStyle.PRIMARY, ElementID.BTN_CLOSE_TICKET_CONFIRM, CONFIG.getProperty("ticket_close_confirmation_button_text", "ticket_close_confirmation_button_text"))
+                                        Button.of(ButtonStyle.PRIMARY, ElementID.BTN_CLOSE_TICKET_CONFIRM, INSTANCE.CONFIG.getProperty("ticket_close_confirmation_button_text", "ticket_close_confirmation_button_text"))
                                 ).setEphemeral(true).queue();
                             }
                         }
