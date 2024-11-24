@@ -222,6 +222,26 @@ public class EventListener extends ListenerAdapter {
                                     embed.setDescription(INSTANCE.CONFIG.getProperty("report_info_text_" + selected, "report_info_text_" + selected));
                                     channel.sendMessageEmbeds(embed.build())
                                             .setActionRow(Button.of(ButtonStyle.DANGER, ElementID.BTN_CLOSE_TICKET, INSTANCE.CONFIG.getProperty("ticket_close_button_text", "ticket_close_button_text"), Emoji.fromUnicode("❌"))).queue();
+
+                                    long channelId = channel.getIdLong();
+                                    try {
+                                        Main.SCHEDULER.schedule(() -> {
+                                            TextChannel checkChannel = INSTANCE.JDA.getTextChannelById(channelId);
+                                            if (checkChannel != null) {
+                                                checkChannel.getHistory().retrievePast(20).queue((messages0) -> {
+                                                    for (Message message0 : messages0) {
+                                                        if (message0.getAuthor().getIdLong() != INSTANCE.JDA.getSelfUser().getIdLong()) {
+                                                            return;
+                                                        }
+                                                    }
+
+                                                    checkChannel.sendMessage(INSTANCE.CONFIG.getProperty("ticket_close_inactive_timeout_message", "ticket_close_inactive_timeout_message")).queue((then0) -> checkChannel.delete().queue());
+                                                });
+                                            }
+                                        }, Integer.parseInt(INSTANCE.CONFIG.getProperty("ticket_close_inactive_timeout_seconds")), TimeUnit.SECONDS);
+                                    } catch (NumberFormatException e) {
+                                        throw new RuntimeException("ticket_close_inactive_timeout_seconds must be a positive integer!");
+                                    }
                                 });
                             }
                         }
