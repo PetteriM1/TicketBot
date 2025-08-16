@@ -205,7 +205,7 @@ public class EventListener extends ListenerAdapter {
                                         EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE, Permission.MESSAGE_ATTACH_FILES);
                                         ((GuildChannel) channel).getManager().setParent(parent)
                                                 .putMemberPermissionOverride(member.getIdLong(), viewAndWrite, null)
-                                                .putRolePermissionOverride(Long.parseLong(INSTANCE.CONFIG.getProperty("ticket_access_role_id", "ticket_access_role_id")), viewAndWrite, null) //TODO: replace with per category roles
+                                                .putRolePermissionOverride(Long.parseLong(INSTANCE.CONFIG.getProperty("ticket_access_role_id_" + selected, "ticket_access_role_id_" + selected)), viewAndWrite, null) //TODO: replace with per category roles
                                                 .queue();
                                     }
                                     String supportRoleId = INSTANCE.CONFIG.getProperty("ping_support_role_id_" + selected);
