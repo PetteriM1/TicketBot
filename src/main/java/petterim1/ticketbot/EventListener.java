@@ -16,6 +16,7 @@ import javax.annotation.Nonnull;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
@@ -159,7 +160,7 @@ public class EventListener extends ListenerAdapter {
                                         chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
                                         File file;
                                         try {
-                                            file = Files.write(Paths.get(channel.getName() + ".txt"), chatLog.toString().getBytes()).toFile();
+                                            file = Files.write(Paths.get(channel.getName() + ".txt"), chatLog.toString().getBytes(StandardCharsets.UTF_8)).toFile();
                                         } catch (IOException e) {
                                             channel.delete().queue();
                                             throw new RuntimeException(e);
