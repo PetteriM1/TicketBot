@@ -15,11 +15,11 @@ import javax.annotation.Nonnull;
 
 import java.awt.*;
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -63,7 +63,7 @@ public class EventListener extends ListenerAdapter {
                     //} else {
                         userPermissions = EnumSet.of(Permission.VIEW_CHANNEL);
                     //}
-                    guild.createTextChannel(INSTANCE.CONFIG.getProperty("ticket_prefix") + member.getEffectiveName())
+                    guild.createTextChannel(INSTANCE.CONFIG.getProperty("ticket_prefix") + member.getUser().getName())
                             .setParent(category)
                             .setTopic(member.getId())
                             .addMemberPermissionOverride(INSTANCE.JDA.getSelfUser().getIdLong(), viewAndWrite, null)
@@ -144,32 +144,7 @@ public class EventListener extends ListenerAdapter {
                                     log("tickets_log_channel is null!");
                                     channel.delete().queue();
                                 } else {
-                                    channel.getHistory().retrievePast(100).queue((messages) -> {
-                                        StringBuilder chatLog = new StringBuilder(channel.getName());
-                                        if (channel.getParent() != null) {
-                                            chatLog.append(" in ").append(channel.getParent().getName());
-                                        }
-                                        chatLog.append(" was created ").append(channel.getTimeCreated()).append("\n\n");
-                                        ListIterator<Message> reverse = messages.listIterator(messages.size());
-                                        while (reverse.hasPrevious()) {
-                                            Message message = reverse.previous();
-                                            if (message.getAuthor().getIdLong() != INSTANCE.JDA.getSelfUser().getIdLong()) {
-                                                chatLog.append(message.getTimeCreated()).append(" ").append(message.getAuthor().getName()).append("\n").append(message.getContentStripped()).append("\n\n");
-                                            }
-                                        }
-                                        chatLog.append(channel.getName()).append(" was closed ").append(OffsetDateTime.now()).append(" by ").append(member.getEffectiveName());
-                                        File file;
-                                        try {
-                                            file = Files.write(Paths.get(channel.getName() + ".txt"), chatLog.toString().getBytes(StandardCharsets.UTF_8)).toFile();
-                                        } catch (IOException e) {
-                                            channel.delete().queue();
-                                            throw new RuntimeException(e);
-                                        }
-                                        logChannel.sendFile(file).queue((then) -> {
-                                            channel.delete().queue();
-                                            file.delete();
-                                        });
-                                    });
+                                    exportFullHistory(channel, member, logChannel);
                                 }
                             });
                             return;
@@ -181,6 +156,74 @@ public class EventListener extends ListenerAdapter {
         } else {
             //log("Malformed ButtonClickEvent data!");
         }
+    }
+
+    private void exportFullHistory(TextChannel channel, Member member, TextChannel logChannel) {
+        StringBuilder chatLog = new StringBuilder();
+
+        chatLog.append(channel.getName());
+        if (channel.getParent() != null) {
+            chatLog.append(" in ").append(channel.getParent().getName());
+        }
+        chatLog.append(" in ").append(channel.getGuild().getName());
+        chatLog.append(" was created ").append(channel.getTimeCreated().atZoneSameInstant(ZoneOffset.UTC)).append(" (UTC)\n\n");
+
+        fetchAll(channel, chatLog, null, () -> {
+            chatLog.append(channel.getName())
+                    .append(" was closed ")
+                    .append(OffsetDateTime.now().atZoneSameInstant(ZoneOffset.UTC))
+                    .append(" (UTC) by ")
+                    .append(member.getUser().getName());
+
+            try {
+                File file = Files.write(Paths.get(channel.getName() + ".txt"),
+                        chatLog.toString().getBytes(StandardCharsets.UTF_8)).toFile();
+
+                logChannel.sendFile(file).queue(done -> {
+                    channel.delete().queue();
+                    file.delete();
+                });
+            } catch (Exception e) {
+                log("Failed to write log");
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void fetchAll(TextChannel channel, StringBuilder chatLog, Long beforeId, Runnable onComplete) {
+        if (beforeId == null) {
+            channel.getHistory().retrievePast(100).queue(messages ->
+                    handleMessages(channel, chatLog, messages, onComplete));
+        } else {
+            channel.getHistoryBefore(beforeId, 100).queue(messages ->
+                    handleMessages(channel, chatLog, messages.getRetrievedHistory(), onComplete));
+        }
+    }
+
+    private void handleMessages(TextChannel channel, StringBuilder chatLog, List<Message> messages, Runnable onComplete) {
+        if (messages.isEmpty()) {
+            onComplete.run();
+            return;
+        }
+
+        ListIterator<Message> it = messages.listIterator(messages.size());
+        while (it.hasPrevious()) {
+            Message msg = it.previous();
+
+            if (msg.getAuthor().getIdLong() != channel.getJDA().getSelfUser().getIdLong()) {
+                chatLog.append(msg.getTimeCreated().atZoneSameInstant(ZoneOffset.UTC))
+                        .append(" ")
+                        .append(msg.getAuthor().getName())
+                        .append(" ")
+                        .append(msg.getAuthor().getId())
+                        .append("\n")
+                        .append(msg.getContentStripped())
+                        .append("\n\n");
+            }
+        }
+
+        long nextBefore = messages.get(messages.size() - 1).getIdLong();
+        fetchAll(channel, chatLog, nextBefore, onComplete);
     }
 
     public void onSelectionMenu(@Nonnull SelectionMenuEvent event) {
