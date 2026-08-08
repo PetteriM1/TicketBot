@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
 import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
+import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.components.Button;
 import net.dv8tion.jda.api.interactions.components.ButtonStyle;
@@ -14,12 +15,6 @@ import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
 import javax.annotation.Nonnull;
 
 import java.awt.*;
-import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -28,12 +23,15 @@ import static petterim1.ticketbot.Main.log;
 
 public class EventListener extends ListenerAdapter {
 
+    private static final EnumSet<Permission> PERMISSION_READ_WRITE = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE, Permission.MESSAGE_ATTACH_FILES);
+
     private final Instance INSTANCE;
 
     EventListener(Instance INSTANCE) {
         this.INSTANCE = INSTANCE;
     }
 
+    @Override
     public void onButtonClick(@Nonnull ButtonClickEvent event) {
         Guild guild = event.getGuild();
         Member member = event.getMember();
@@ -50,25 +48,18 @@ public class EventListener extends ListenerAdapter {
                 if (category == null) {
                     log("new_ticket_channels_category is null!");
                 } else {
-                    int typesCount;
-                    try {
-                        typesCount = Integer.parseInt(INSTANCE.CONFIG.getProperty("category_panel_categories"));
-                    } catch (NumberFormatException e) {
-                        throw new RuntimeException("category_panel_categories must be a positive integer!");
-                    }
-                    EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE);
-                    EnumSet<Permission> userPermissions;
+                    EnumSet<Permission> pendingTicketUserPermissions;
                     //if (typesCount < 2) {
-                        //userPermissions = viewAndWrite; //TODO: if typesCount < 2, no category selection needed, set support role permission
+                        //pendingTicketUserPermissions = PERMISSION_VIEW_AND_WRITE; //TODO: if typesCount < 2, no category selection needed, set support role permission
                     //} else {
-                        userPermissions = EnumSet.of(Permission.VIEW_CHANNEL);
+                        pendingTicketUserPermissions = EnumSet.of(Permission.VIEW_CHANNEL);
                     //}
                     guild.createTextChannel(INSTANCE.CONFIG.getProperty("ticket_prefix") + member.getUser().getName())
                             .setParent(category)
                             .setTopic(member.getId())
-                            .addMemberPermissionOverride(INSTANCE.JDA.getSelfUser().getIdLong(), viewAndWrite, null)
-                            .addMemberPermissionOverride(member.getIdLong(), userPermissions, /*typesCount < 2 ? null :*/ EnumSet.of(Permission.MESSAGE_WRITE))
-                            .addPermissionOverride(guild.getPublicRole(), null, viewAndWrite)
+                            .addMemberPermissionOverride(INSTANCE.JDA.getSelfUser().getIdLong(), PERMISSION_READ_WRITE, null)
+                            .addMemberPermissionOverride(member.getIdLong(), pendingTicketUserPermissions, /*typesCount < 2 ? null :*/ EnumSet.of(Permission.MESSAGE_WRITE))
+                            .addPermissionOverride(guild.getPublicRole(), null, PERMISSION_READ_WRITE)
                             .queue((channel) -> {
                                 event.getInteraction().reply(INSTANCE.CONFIG.getProperty("tickets_panel_reply_channel_created", "tickets_panel_reply_channel_created") + " <#" + channel.getId() + ">").setEphemeral(true).queue();
                                 EmbedBuilder embed = new EmbedBuilder();
@@ -79,7 +70,7 @@ public class EventListener extends ListenerAdapter {
                                     return; //TODO: if typesCount < 2, no category selection needed, send ticket info
                                 }*/
                                 ArrayList<SelectOption> ticketTypes = new ArrayList<>();
-                                for (int i = 1; i <= typesCount; i++) {
+                                for (int i = 1; i <= INSTANCE.typesCount; i++) {
                                     ticketTypes.add(SelectOption.of(INSTANCE.CONFIG.getProperty("category_panel_category_name_" + i, "category_panel_category_name_" + i), ElementID.ROW_VALUE + "=" + i)
                                                     .withDescription(INSTANCE.CONFIG.getProperty("category_panel_description_" + i, "category_panel_description_" + i))
                                                     .withEmoji(Emoji.fromUnicode("❓")));
@@ -118,34 +109,34 @@ public class EventListener extends ListenerAdapter {
                 ).setEphemeral(true).queue();
             } else if (ElementID.BTN_CLOSE_TICKET_CONFIRM.equals(buttonId)) {
                 TextChannel channel = guild.getTextChannelById(event.getChannel().getId());
-                if (channel == null) {
-                    log("Failed to find TextChannel where close confirmation button was clicked!");
+                if (channel == null || !INSTANCE.isTicketChannel(channel)) {
+                    log("Failed to find ticket TextChannel where close confirmation button was clicked!");
                 } else {
                     Category category = channel.getParent();
                     if (category != null) {
-                        int typesCount;
-                        try {
-                            typesCount = Integer.parseInt(INSTANCE.CONFIG.getProperty("category_panel_categories"));
-                        } catch (NumberFormatException e) {
-                            throw new RuntimeException("category_panel_categories must be a positive integer!");
-                        }
-                        boolean inTicketCategory = false;
-                        for (int i = 1; i <= typesCount; i++) {
+                        int inTicketCategory = 0;
+                        for (int i = 1; i <= INSTANCE.typesCount; i++) {
                             String ticketCategory = INSTANCE.CONFIG.getProperty("category_id_for_" + i);
                             if (category.getId().equals(ticketCategory)) {
-                                inTicketCategory = true;
+                                inTicketCategory = i;
                                 break;
                             }
                         }
-                        if (inTicketCategory) {
+                        if (inTicketCategory > 0) {
+                            int finalInTicketCategory = inTicketCategory;
                             event.getInteraction().reply(INSTANCE.CONFIG.getProperty("ticket_close_reply", "ticket_close_reply")).setEphemeral(true).queue((x) -> {
-                                TextChannel logChannel = INSTANCE.JDA.getTextChannelById(INSTANCE.CONFIG.getProperty("tickets_log_channel"));
-                                if (logChannel == null) {
-                                    log("tickets_log_channel is null!");
+                                String logChannelId = INSTANCE.CONFIG.getProperty("tickets_log_channel");
+                                if (logChannelId.isEmpty()) {
                                     channel.delete().queue();
                                 } else {
-                                    exportFullHistory(channel, member, logChannel);
+                                    TextChannel logChannel = INSTANCE.JDA.getTextChannelById(logChannelId);
+                                    if (logChannel == null) {
+                                        log("tickets_log_channel is null!");
+                                    } else {
+                                        HistoryUtils.exportFullHistoryAndDelete(channel, member, logChannel);
+                                    }
                                 }
+                                tryDeleteStaffPanel(finalInTicketCategory, member.getId());
                             });
                             return;
                         }
@@ -153,79 +144,10 @@ public class EventListener extends ListenerAdapter {
                     event.getInteraction().reply(INSTANCE.CONFIG.getProperty("ticket_close_error", "ticket_close_error")).setEphemeral(true).queue();
                 }
             }
-        } else {
-            //log("Malformed ButtonClickEvent data!");
         }
     }
 
-    private void exportFullHistory(TextChannel channel, Member member, TextChannel logChannel) {
-        StringBuilder chatLog = new StringBuilder();
-
-        chatLog.append(channel.getName());
-        if (channel.getParent() != null) {
-            chatLog.append(" in ").append(channel.getParent().getName());
-        }
-        chatLog.append(" in ").append(channel.getGuild().getName());
-        chatLog.append(" was created ").append(channel.getTimeCreated().atZoneSameInstant(ZoneOffset.UTC)).append(" (UTC)\n\n");
-
-        fetchAll(channel, chatLog, null, () -> {
-            chatLog.append(channel.getName())
-                    .append(" was closed ")
-                    .append(OffsetDateTime.now().atZoneSameInstant(ZoneOffset.UTC))
-                    .append(" (UTC) by ")
-                    .append(member.getUser().getName());
-
-            try {
-                File file = Files.write(Paths.get(channel.getName() + ".txt"),
-                        chatLog.toString().getBytes(StandardCharsets.UTF_8)).toFile();
-
-                logChannel.sendFile(file).queue(done -> {
-                    channel.delete().queue();
-                    file.delete();
-                });
-            } catch (Exception e) {
-                log("Failed to write log");
-                e.printStackTrace();
-            }
-        });
-    }
-
-    private void fetchAll(TextChannel channel, StringBuilder chatLog, Long beforeId, Runnable onComplete) {
-        if (beforeId == null) {
-            channel.getHistory().retrievePast(100).queue(messages ->
-                    handleMessages(channel, chatLog, messages, onComplete));
-        } else {
-            channel.getHistoryBefore(beforeId, 100).queue(messages ->
-                    handleMessages(channel, chatLog, messages.getRetrievedHistory(), onComplete));
-        }
-    }
-
-    private void handleMessages(TextChannel channel, StringBuilder chatLog, List<Message> messages, Runnable onComplete) {
-        if (messages.isEmpty()) {
-            onComplete.run();
-            return;
-        }
-
-        ListIterator<Message> it = messages.listIterator(messages.size());
-        while (it.hasPrevious()) {
-            Message msg = it.previous();
-
-            if (msg.getAuthor().getIdLong() != channel.getJDA().getSelfUser().getIdLong()) {
-                chatLog.append(msg.getTimeCreated().atZoneSameInstant(ZoneOffset.UTC))
-                        .append(" ")
-                        .append(msg.getAuthor().getName())
-                        .append(" ")
-                        .append(msg.getAuthor().getId())
-                        .append("\n")
-                        .append(msg.getContentStripped())
-                        .append("\n\n");
-            }
-        }
-
-        long nextBefore = messages.get(messages.size() - 1).getIdLong();
-        fetchAll(channel, chatLog, nextBefore, onComplete);
-    }
-
+    @Override
     public void onSelectionMenu(@Nonnull SelectionMenuEvent event) {
         Guild guild = event.getGuild();
         Member member = event.getMember();
@@ -246,10 +168,9 @@ public class EventListener extends ListenerAdapter {
                                     } else if (!(channel instanceof GuildChannel)) {
                                         log("MessageChannel is not a GuildChannel!");
                                     } else {
-                                        EnumSet<Permission> viewAndWrite = EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_WRITE, Permission.MESSAGE_ATTACH_FILES);
                                         ((GuildChannel) channel).getManager().setParent(parent)
-                                                .putMemberPermissionOverride(member.getIdLong(), viewAndWrite, null)
-                                                .putRolePermissionOverride(Long.parseLong(INSTANCE.CONFIG.getProperty("ticket_access_role_id_" + selected, "ticket_access_role_id_" + selected)), viewAndWrite, null) //TODO: replace with per category roles
+                                                .putMemberPermissionOverride(member.getIdLong(), PERMISSION_READ_WRITE, null)
+                                                .putRolePermissionOverride(Long.parseLong(INSTANCE.CONFIG.getProperty("ticket_access_role_id_" + selected, "ticket_access_role_id_" + selected)), PERMISSION_READ_WRITE, null) //TODO: replace with per category roles
                                                 .queue();
                                     }
                                     String supportRoleId = INSTANCE.CONFIG.getProperty("ping_support_role_id_" + selected);
@@ -292,8 +213,205 @@ public class EventListener extends ListenerAdapter {
                     });
                 }
             }
-        } else {
-            //log("Malformed SelectionMenuEvent data!");
+        }
+    }
+
+    @Override
+    public void onGuildMessageReceived(@Nonnull GuildMessageReceivedEvent event) {
+        if (event.getAuthor().isBot()) {
+            return;
+        }
+
+        TextChannel channel = event.getChannel();
+        Category category = channel.getParent();
+        String topic = channel.getTopic();
+
+        if (category == null || topic == null) {
+            return;
+        }
+
+        if (!INSTANCE.isTicketChannel(channel)) {
+            return;
+        }
+
+        int inTicketCategory = 0;
+        for (int i = 1; i <= INSTANCE.typesCount; i++) {
+            String ticketCategory = INSTANCE.CONFIG.getProperty("category_id_for_" + i);
+            if (category.getId().equals(ticketCategory)) {
+                inTicketCategory = i;
+                break;
+            }
+        }
+
+        if (inTicketCategory < 1) {
+            tryHandleStaffPanelMessage(category, topic, event.getMessage());
+            return;
+        }
+
+        String targetCategoryId = INSTANCE.CONFIG.getProperty("staff_panel_id_for_" + inTicketCategory);
+        if (targetCategoryId == null || targetCategoryId.isEmpty()) {
+            return;
+        }
+
+        Category targetCategory = INSTANCE.JDA.getCategoryById(targetCategoryId);
+        if (targetCategory == null) {
+            log("Didn't find Category for staff_panel_id_for_" + inTicketCategory);
+            return;
+        }
+
+        TextChannel targetChannel = null;
+        for (TextChannel c : targetCategory.getTextChannels()) {
+            if (c.getTopic() != null && c.getTopic().equals(event.getAuthor().getId())) {
+                targetChannel = c;
+                break;
+            }
+        }
+
+        StringBuilder fullMsg;
+
+        if (targetChannel == null) {
+            fullMsg = new StringBuilder("New ticket in '")
+                    .append(INSTANCE.CONFIG.getProperty("category_panel_category_name_" + inTicketCategory))
+                    .append("'\n\n<@")
+                    .append(event.getAuthor().getId())
+                    .append("> on <#")
+                    .append(channel.getId())
+                    .append(">\n")
+                    .append(event.getMessage().getContentStripped());
+
+            if (!event.getMessage().getAttachments().isEmpty()) {
+                for (Message.Attachment attachment : event.getMessage().getAttachments()) {
+                    fullMsg.append("\n").append(attachment.getUrl());
+                }
+            }
+
+            targetCategory.getGuild().createTextChannel(channel.getName())
+                    .setParent(targetCategory)
+                    .setTopic(event.getAuthor().getId())
+                    //.addMemberPermissionOverride(INSTANCE.JDA.getSelfUser().getIdLong(), PERMISSION_READ_WRITE, null)
+                    //.addPermissionOverride(targetCategory.getGuild().getPublicRole(), null, PERMISSION_READ_WRITE)
+                    .queue((newChannel) ->
+                            newChannel.sendMessage(fullMsg).queue());
+            return;
+        }
+
+        fullMsg = new StringBuilder("<@")
+                .append(event.getAuthor().getId())
+                .append("> on <#")
+                .append(channel.getId())
+                .append(">\n")
+                .append(event.getMessage().getContentStripped());
+
+        if (!event.getMessage().getAttachments().isEmpty()) {
+            for (Message.Attachment attachment : event.getMessage().getAttachments()) {
+                fullMsg.append("\n").append(attachment.getUrl());
+            }
+        }
+
+        targetChannel.sendMessage(fullMsg).queue();
+    }
+
+    private void tryHandleStaffPanelMessage(Category category, String topic, Message originalMessage) {
+        int inTicketCategory = 0;
+        for (int i = 1; i <= INSTANCE.typesCount; i++) {
+            String ticketCategory = INSTANCE.CONFIG.getProperty("staff_panel_id_for_" + i);
+            if (category.getId().equals(ticketCategory)) {
+                inTicketCategory = i;
+                break;
+            }
+        }
+
+        if (inTicketCategory < 1) {
+            return;
+        }
+
+        String targetCategoryId = INSTANCE.CONFIG.getProperty("category_id_for_" + inTicketCategory);
+        if (targetCategoryId == null || targetCategoryId.isEmpty()) {
+            return;
+        }
+
+        Category targetCategory = INSTANCE.JDA.getCategoryById(targetCategoryId);
+        if (targetCategory == null) {
+            log("Didn't find Category for category_id_for_" + inTicketCategory);
+            return;
+        }
+
+        TextChannel targetChannel = null;
+        for (TextChannel c : targetCategory.getTextChannels()) {
+            if (c.getTopic() != null && c.getTopic().equals(topic)) {
+                targetChannel = c;
+                break;
+            }
+        }
+
+        boolean allowCategoryMerge = true;
+
+        if (targetChannel == null) {
+            if (allowCategoryMerge) {
+                channelFound:
+
+                for (int i = 1; i <= INSTANCE.typesCount; i++) {
+                    String ticketCategory = INSTANCE.CONFIG.getProperty("category_id_for_" + i);
+                    if (ticketCategory == null || ticketCategory.isEmpty()) {
+                        continue;
+                    }
+
+                    Category otherCategory = INSTANCE.JDA.getCategoryById(ticketCategory);
+                    if (otherCategory == null) {
+                        continue;
+                    }
+
+                    for (TextChannel c : otherCategory.getTextChannels()) {
+                        if (c.getTopic() != null && c.getTopic().equals(topic)) {
+                            targetChannel = c;
+                            break channelFound;
+                        }
+                    }
+                }
+            }
+
+            if (targetChannel == null) {
+                originalMessage.addReaction("❌").queue();
+                return;
+            }
+        }
+
+        StringBuilder fullMsg = new StringBuilder("<@")
+                .append(topic)
+                .append("> ")
+                .append(INSTANCE.CONFIG.getProperty("staff_reply_format"))
+                .append(originalMessage.getContentStripped());
+
+        if (!originalMessage.getAttachments().isEmpty()) {
+            for (Message.Attachment attachment : originalMessage.getAttachments()) {
+                fullMsg.append("\n").append(attachment.getUrl());
+            }
+        }
+
+        targetChannel.sendMessage(fullMsg).queue((sent) -> {
+            if (sent != null) {
+                originalMessage.addReaction("✅").queue();
+            }
+        });
+    }
+
+    private void tryDeleteStaffPanel(int inTicketCategory, String closedById) {
+        String targetCategoryId = INSTANCE.CONFIG.getProperty("staff_panel_id_for_" + inTicketCategory);
+        if (targetCategoryId == null || targetCategoryId.isEmpty()) {
+            return;
+        }
+
+        Category targetCategory = INSTANCE.JDA.getCategoryById(targetCategoryId);
+        if (targetCategory == null) {
+            log("Didn't find Category for staff_panel_id_for_" + inTicketCategory);
+            return;
+        }
+
+        for (TextChannel c : targetCategory.getTextChannels()) {
+            if (c.getTopic() != null && c.getTopic().equals(closedById)) {
+                c.delete().queue();
+                return;
+            }
         }
     }
 }

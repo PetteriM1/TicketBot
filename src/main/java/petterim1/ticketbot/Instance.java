@@ -23,6 +23,8 @@ public class Instance {
     final JDA JDA;
     final Properties CONFIG = new Properties();
 
+    int typesCount;
+
     Instance(String name) throws InterruptedException, LoginException, IOException {
         log("Loading " + name + "...");
         loadConfig("instances/" + name);
@@ -44,6 +46,16 @@ public class Instance {
         FileInputStream propsInput = new FileInputStream(name);
         CONFIG.load(propsInput);
         propsInput.close();
+        checkConfig();
+    }
+
+    private void checkConfig() {
+        try {
+            typesCount = Integer.parseInt(CONFIG.getProperty("category_panel_categories"));
+            if (typesCount < 1) throw new NumberFormatException();
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("category_panel_categories must be a positive integer!");
+        }
     }
 
     void prepareCommands() {
@@ -88,5 +100,19 @@ public class Instance {
         embed.setDescription(CONFIG.getProperty("tickets_panel_text", "tickets_panel_text"));
         channel.sendMessageEmbeds(embed.build())
                 .setActionRow(Button.of(ButtonStyle.PRIMARY, ElementID.BTN_OPEN_TICKET, CONFIG.getProperty("tickets_panel_button_text", "tickets_panel_button_text"), Emoji.fromUnicode("\uD83C\uDFAB"))).queue();
+    }
+
+    boolean isTicketChannel(TextChannel channel) {
+        if (channel.getTopic() == null || !channel.getName().startsWith(CONFIG.getProperty("ticket_prefix"))) {
+            return false;
+        }
+
+        try {
+            Long.parseLong(channel.getTopic());
+        } catch (NumberFormatException notATicket) {
+            return false;
+        }
+
+        return true;
     }
 }
