@@ -136,7 +136,7 @@ public class EventListener extends ListenerAdapter {
                                         HistoryUtils.exportFullHistoryAndDelete(channel, member, logChannel);
                                     }
                                 }
-                                tryDeleteStaffPanel(finalInTicketCategory, member.getId());
+                                tryDeleteStaffPanel(finalInTicketCategory, channel.getTopic());
                             });
                             return;
                         }
@@ -261,7 +261,7 @@ public class EventListener extends ListenerAdapter {
 
         TextChannel targetChannel = null;
         for (TextChannel c : targetCategory.getTextChannels()) {
-            if (c.getTopic() != null && c.getTopic().equals(event.getAuthor().getId())) {
+            if (c.getTopic() != null && c.getTopic().equals(topic)) {
                 targetChannel = c;
                 break;
             }
@@ -287,7 +287,7 @@ public class EventListener extends ListenerAdapter {
 
             targetCategory.getGuild().createTextChannel(channel.getName())
                     .setParent(targetCategory)
-                    .setTopic(event.getAuthor().getId())
+                    .setTopic(topic)
                     //.addMemberPermissionOverride(INSTANCE.JDA.getSelfUser().getIdLong(), PERMISSION_READ_WRITE, null)
                     //.addPermissionOverride(targetCategory.getGuild().getPublicRole(), null, PERMISSION_READ_WRITE)
                     .queue((newChannel) ->
@@ -395,7 +395,7 @@ public class EventListener extends ListenerAdapter {
         });
     }
 
-    private void tryDeleteStaffPanel(int inTicketCategory, String closedById) {
+    private void tryDeleteStaffPanel(int inTicketCategory, String topic) {
         String targetCategoryId = INSTANCE.CONFIG.getProperty("staff_panel_id_for_" + inTicketCategory);
         if (targetCategoryId == null || targetCategoryId.isEmpty()) {
             return;
@@ -408,7 +408,7 @@ public class EventListener extends ListenerAdapter {
         }
 
         for (TextChannel c : targetCategory.getTextChannels()) {
-            if (c.getTopic() != null && c.getTopic().equals(closedById)) {
+            if (c.getTopic() != null && c.getTopic().equals(topic)) {
                 c.delete().queue();
                 return;
             }
